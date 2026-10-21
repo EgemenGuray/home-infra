@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- S0.2.3: keeps the Home Assistant OS VM running. Installed as a LaunchAgent of the
+     auto-login "hub" user, because UTM is a GUI app and needs a user session. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>home.hub.ha-vm</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/libexec/home-hub/ha-vm-watchdog.sh</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>StartInterval</key><integer>120</integer>
+  <key>StandardOutPath</key><string>/tmp/home.hub.ha-vm.log</string>
+  <key>StandardErrorPath</key><string>/tmp/home.hub.ha-vm.log</string>
+</dict>
+</plist>

@@ -1,0 +1,19 @@
+name: lint
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck -S warning macos/*.sh macos/launchd/*.sh services/*.sh scripts/*.sh
+      - name: compose config
+        run: |
+          cp services/.env.example services/.env
+          docker compose -f services/compose.yaml config -q
+      - name: plist syntax
+        run: python3 -c "import plistlib,glob; [plistlib.load(open(f,'rb')) for f in glob.glob('macos/launchd/*.plist')]"

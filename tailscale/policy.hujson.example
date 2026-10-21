@@ -1,0 +1,30 @@
+// Tailnet access policy (S0.1.4, S0.1.5). Paste into the Tailscale admin console > Access controls,
+// replacing the example emails with your own login. Keep the real file out of git.
+{
+  "groups": {
+    "group:owner": ["owner@example.com"],
+  },
+  "tagOwners": {
+    "tag:server":    ["group:owner"],   // the hub Mac, later the Mac Studio
+    "tag:workspace": ["group:owner"],   // Phase 1 agent workspaces (cloud VM)
+  },
+  "acls": [
+    // Your phone and laptop reach everything on the servers (HA, vault, SSH, screen sharing).
+    {"action": "accept", "src": ["group:owner"], "dst": ["tag:server:*"]},
+    // Subnet routes to the home networks, for the app away from home.
+    {"action": "accept", "src": ["group:owner"], "dst": ["192.168.0.0/16:*"]},
+    // Phase 1: workspaces reach only the egress proxies and the message bus on the hub Mac.
+    // {"action": "accept", "src": ["tag:workspace"], "dst": ["tag:server:8888,1080,4222"]},
+  ],
+  "ssh": [
+    // Tailscale SSH only for you, into the admin account, with a periodic re-check.
+    {"action": "check", "src": ["group:owner"], "dst": ["tag:server"], "users": ["autogroup:nonroot"]},
+  ],
+  "nodeAttrs": [
+    // Funnel stays off for every node.
+  ],
+  "tests": [
+    {"src": "group:owner", "accept": ["tag:server:443"]},
+    {"src": "tag:workspace", "deny": ["tag:server:22", "tag:server:8123"]},
+  ],
+}

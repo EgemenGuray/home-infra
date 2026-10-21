@@ -1,0 +1,62 @@
+# Services on the hub Mac. Every port binds to 127.0.0.1 only; tailscale-serve.sh publishes
+# them to the tailnet over HTTPS. Nothing is reachable from the LAN or the internet.
+# Usage: cp .env.example .env && docker compose up -d   (OrbStack or Docker Desktop)
+name: home-hub
+
+services:
+  vaultwarden:
+    image: vaultwarden/server:1.32.7
+    container_name: vaultwarden
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DOMAIN: ${VAULT_DOMAIN}
+      SIGNUPS_ALLOWED: ${VAULT_SIGNUPS_ALLOWED:-false}
+      INVITATIONS_ALLOWED: "false"
+      SHOW_PASSWORD_HINT: "false"
+      PASSWORD_ITERATIONS: "600000"
+      LOGIN_RATELIMIT_MAX_BURST: "5"
+      ADMIN_RATELIMIT_MAX_BURST: "3"
+      IP_HEADER: X-Forwarded-For
+      ROCKET_PORT: "8080"
+    volumes:
+      - vaultwarden-data:/data
+    ports:
+      - "127.0.0.1:8222:8080"
+    mem_limit: 256m
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1.23.16
+    container_name: uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - uptime-kuma-data:/app/data
+    ports:
+      - "127.0.0.1:3001:3001"
+    mem_limit: 256m
+
+  vaultwarden-backup:
+    # Nightly encrypted copy of the vault database (S0.2.5). Data is already end-to-end
+    # encrypted by Bitwarden clients; this protects against disk loss.
+    image: alpine:3.20
+    container_name: vaultwarden-backup
+    restart: unless-stopped
+    volumes:
+      - vaultwarden-data:/data:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache sqlite >/dev/null
+        while true; do
+          ts=$$(date +%Y%m%d)
+          sqlite3 /data/db.sqlite3 ".backup '/backups/vault-$$ts.sqlite3'"
+          tar -C /data -czf /backups/vault-files-$$ts.tgz attachments sends rsa_key.pem 2>/dev/null || true
+          find /backups -name 'vault-*' -mtime +30 -delete
+          sleep 86400
+        done
+    mem_limit: 64m
+
+volumes:
+  vaultwarden-data:
+  uptime-kuma-data:
