@@ -1,0 +1,26 @@
+# E2.6 (and useful from Phase 0): host dashboards and a second uptime watcher.
+# Run on both Macs: each one's Uptime Kuma watches the other, and Beszel's hub on one Mac
+# collects CPU, memory, disk and temperature from agents on both. Localhost only; published
+# to the tailnet with tailscale serve.
+name: monitoring
+
+services:
+  beszel-hub:
+    image: henrygd/beszel:0.9.1
+    restart: unless-stopped
+    volumes: ["beszel-data:/beszel_data"]
+    ports: ["127.0.0.1:8090:8090"]
+    mem_limit: 128m
+
+  beszel-agent:
+    image: henrygd/beszel-agent:0.9.1
+    restart: unless-stopped
+    network_mode: host
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"]
+    environment:
+      LISTEN: 127.0.0.1:45876
+      KEY: ${BESZEL_AGENT_PUBLIC_KEY:?copy the public key shown in the hub}
+    mem_limit: 64m
+
+volumes:
+  beszel-data:

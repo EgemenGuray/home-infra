@@ -1,6 +1,6 @@
 # home-infra
 
-Setup and security for the house hub: the hub Mac (Mac mini), the TP-Link network and remote access. Covers roadmap epics **E0.1** (network, static IP, Tailscale, lockdown) and **E0.2** (always-on house hub), and later **E1.3** (agent egress routes).
+Setup and security for the house hub: the hub Mac (Mac mini), the TP-Link network and remote access. Covers roadmap epics **E0.1** (network, static IP, Tailscale, lockdown), **E0.2** (always-on house hub), **E1.3** (agent egress routes), **E2.1** and **E2.6** (Mac Studio and cross-monitoring) and **E3.2** (resilience).
 
 Nothing here opens an inbound port. Every service binds to `127.0.0.1` on the Mac and is published only to the tailnet with `tailscale serve`.
 
@@ -17,6 +17,9 @@ Nothing here opens an inbound port. Every service binds to `127.0.0.1` on the Ma
 | `tailscale/policy.hujson.example` | Tailnet access rules: only your phone and laptop reach admin ports. | S0.1.4, S0.1.5 |
 | `scripts/check-listeners.sh` | Run on the hub Mac: fails if anything listens on a non-loopback, non-tailnet address. | S0.1.5 |
 | `scripts/external-port-scan.sh` | Run from outside the house: scans the static IP and expects zero open ports. | S0.1.5 |
+| `services/monitoring/` | Beszel host dashboards and a second Uptime Kuma, so the two Macs watch each other. | E2.6 |
+| `docs/studio-checklist.md` | Mac Studio bring-up: same baseline, FileVault on, shuts down first on the UPS. | E2.1 |
+| `docs/phase-3.md` | Backup internet line and a hot spare. | E3.2 |
 | `docs/hands-on-checklist.md` | Every step that needs your hands on the hub Mac, the router or your accounts, in order. | E0.1, E0.2 |
 | `docs/router.md` | TP-Link settings to apply and verify, including the Phase 1 Lab network. | S0.1.1 to S0.1.3, S1.3.3 |
 | `services/egress/` | Agent egress routes: home proxy and one Gluetun NordVPN tunnel per country, with kill switch, published to the tailnet only. | S1.3.1, S1.3.2 |
