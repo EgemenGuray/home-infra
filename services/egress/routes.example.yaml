@@ -1,0 +1,4 @@
+# Expected exit per route (copy to routes.yaml on the hub Mac with the real home IP; git-ignored).
+home:       {port: 8888, country: CA, ip: "203.0.113.10"}
+nord-us-ny: {port: 8889, country: US}
+nord-de:    {port: 8890, country: DE}

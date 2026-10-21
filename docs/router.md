@@ -17,6 +17,7 @@ Model line: _to confirm_ · Firmware: _to confirm_ · Supports VLANs / mDNS refl
 | IoT | WPA2/3, 2.4 GHz allowed, band steering off; client isolation **off** | HA must discover devices |
 | IoT | Internet only for devices that need it (Nest, Dreame, Govee); reach only the hub Mac's service ports | Limits what a hacked bulb can do |
 | Guest | Isolated from all local networks | Visitors reach nothing local |
+| Lab (Phase 1, S1.3.3) | VLAN or SSID for workspaces that must always exit from one country; internet only through the router's VPN client (NordLynx) with its kill switch; reaches only the hub Mac's proxy and NATS ports | The `router-vpn` route |
 | Discovery | mDNS reflection Main ↔ IoT; if missing, give the hub Mac a second interface (USB Ethernet) on IoT | Hue, Apple TV, ESPHome, Cast discovery |
 | DHCP | Reservations for the hub Mac, voice devices, Hue Bridge, SwitchBot Hub, TVs, soundbars, Apple TV, Plex, Windows PC | Stable addresses for HA |
 | DNS | Local names for the hub Mac and HA, or AdGuard Home add-on in HA | |
@@ -28,3 +29,4 @@ Model line: _to confirm_ · Firmware: _to confirm_ · Supports VLANs / mDNS refl
 - `scripts/external-port-scan.sh` from mobile data: zero open ports. Repeat after every router change and monthly.
 - A phone on Guest cannot open the HA page; a phone on IoT cannot reach the hub Mac's SSH port.
 - Firmware auto-update on, or a monthly reminder.
+- Phase 1: Main and IoT still exit from the static IP after the Lab VPN is on (`curl ipinfo.io` from a Main device), and Lab stops when the router VPN is disconnected.

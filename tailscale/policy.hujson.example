@@ -14,7 +14,9 @@
     // Subnet routes to the home networks, for the app away from home.
     {"action": "accept", "src": ["group:owner"], "dst": ["192.168.0.0/16:*"]},
     // Phase 1: workspaces reach only the egress proxies and the message bus on the hub Mac.
-    // {"action": "accept", "src": ["tag:workspace"], "dst": ["tag:server:8888,1080,4222"]},
+    {"action": "accept", "src": ["tag:workspace"], "dst": ["tag:server:8888,8889,8890,4222"]},
+    // The agent service on the hub Mac reaches the workspace VM to manage workspaces and the live view.
+    {"action": "accept", "src": ["tag:server"], "dst": ["tag:workspace:2375,6080"]},
   ],
   "ssh": [
     // Tailscale SSH only for you, into the admin account, with a periodic re-check.

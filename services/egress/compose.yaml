@@ -1,0 +1,57 @@
+# E1.3 egress routes on the hub Mac. Each route is an HTTP proxy; workspaces are told which one to use
+# and cannot reach the internet any other way. Ports bind to localhost and are published to
+# the tailnet only (tailscale-serve-egress.sh), where the policy lets only tag:workspace in.
+# NordVPN's own app is never installed: it would move Home Assistant onto the VPN too.
+name: egress
+
+x-gluetun: &gluetun
+  image: qmcgaw/gluetun:v3.39
+  restart: unless-stopped
+  cap_add: [NET_ADMIN]
+  devices: ["/dev/net/tun:/dev/net/tun"]
+  env_file: .env
+  mem_limit: 96m
+  environment: &gluetun-env
+    VPN_SERVICE_PROVIDER: nordvpn
+    VPN_TYPE: wireguard
+    # Kill switch is built in: if the tunnel drops, the proxy has no route out.
+    HTTPPROXY: "on"
+    HTTPPROXY_LISTENING_ADDRESS: ":8888"
+    HTTPPROXY_STEALTH: "on"
+    DOT: "on"                       # DNS over TLS through the tunnel, no leaks
+    BLOCK_MALICIOUS: "on"
+    HEALTH_VPN_DURATION_INITIAL: 10s
+
+services:
+  route-home:
+    # The home static IP: a plain proxy with no VPN, used for logged-in sites.
+    image: vimagick/tinyproxy:latest
+    restart: unless-stopped
+    volumes:
+      - ./tinyproxy.conf:/etc/tinyproxy/tinyproxy.conf:ro
+    ports: ["127.0.0.1:8888:8888"]
+    mem_limit: 32m
+
+  route-nord-us-ny:
+    <<: *gluetun
+    environment:
+      <<: *gluetun-env
+      SERVER_COUNTRIES: United States
+      SERVER_CITIES: New York
+      WIREGUARD_PRIVATE_KEY: ${NORDLYNX_PRIVATE_KEY:?set in .env}
+      HTTPPROXY_USER: ${PROXY_USER:?set in .env}
+      HTTPPROXY_PASSWORD: ${PROXY_PASSWORD:?set in .env}
+    ports: ["127.0.0.1:8889:8888"]
+
+  route-nord-de:
+    <<: *gluetun
+    environment:
+      <<: *gluetun-env
+      SERVER_COUNTRIES: Germany
+      WIREGUARD_PRIVATE_KEY: ${NORDLYNX_PRIVATE_KEY:?set in .env}
+      HTTPPROXY_USER: ${PROXY_USER:?set in .env}
+      HTTPPROXY_PASSWORD: ${PROXY_PASSWORD:?set in .env}
+    ports: ["127.0.0.1:8890:8888"]
+
+# Add a country: copy a nord block, pick the next port, add it to routes.example.yaml, the
+# workspace gateway and the policy. Measure the hub Mac's RAM first (S1.3.1): each tunnel is ~40 MB.

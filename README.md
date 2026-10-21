@@ -18,7 +18,9 @@ Nothing here opens an inbound port. Every service binds to `127.0.0.1` on the Ma
 | `scripts/check-listeners.sh` | Run on the hub Mac: fails if anything listens on a non-loopback, non-tailnet address. | S0.1.5 |
 | `scripts/external-port-scan.sh` | Run from outside the house: scans the static IP and expects zero open ports. | S0.1.5 |
 | `docs/hands-on-checklist.md` | Every step that needs your hands on the hub Mac, the router or your accounts, in order. | E0.1, E0.2 |
-| `docs/router.md` | TP-Link settings to apply and verify. | S0.1.1 to S0.1.3 |
+| `docs/router.md` | TP-Link settings to apply and verify, including the Phase 1 Lab network. | S0.1.1 to S0.1.3, S1.3.3 |
+| `services/egress/` | Agent egress routes: home proxy and one Gluetun NordVPN tunnel per country, with kill switch, published to the tailnet only. | S1.3.1, S1.3.2 |
+| `scripts/check-routes.sh` | Checks each route's exit IP and country; fails on any mismatch. | S1.3.5 |
 
 ## Order of work
 
