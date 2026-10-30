@@ -4,6 +4,8 @@ Steps that need you physically at the hub Mac, the router, or signed in to your 
 
 Never run any of this on a personal laptop as a server step: personal machines are only clients (Bitwarden app, Tailscale).
 
+This checklist is the same for both setups (see the README): the hub Mac is set up identically whether or not a Mac Studio joins later. **Mac mini only:** you are done after part D. **Mac mini + Mac Studio:** after part D, continue with `studio-checklist.md`. The hub Mac's settings don't change, but the UPS order and monitoring do.
+
 ## A. Accounts, from a clean device (S0.1.5, S0.1.6). Do this first.
 
 1. From your phone or a device you trust, review the password and 2FA on your main email, shopping, Apple and banking accounts.
@@ -30,7 +32,7 @@ Never run any of this on a personal laptop as a server step: personal machines a
 12. Create your vault account: `VAULT_SIGNUPS_ALLOWED=true docker compose up -d vaultwarden`, sign up in the Bitwarden app on your phone (server URL = the vault address), then `docker compose up -d vaultwarden` again so sign-ups close. Import your browser's password export, delete the export file, turn off browser password saving.
 13. Uptime Kuma (tailnet address, port 3443): add checks for HA, Vaultwarden, Tailscale and an internet target.
 14. `./scripts/check-listeners.sh` must pass.
-15. Buy a UPS (CA$140 to 285) for the hub Mac, the router and the Zigbee stick; connect it by USB and set shutdown at 20% in Energy > UPS.
+15. Buy a UPS (CA$140 to 285) for the hub Mac, the router and the Zigbee stick; connect it by USB and set shutdown at 20% in Energy > UPS. **Mac mini + Mac Studio:** size the UPS for the Studio's rated power too, and give it its own USB link so it shuts down first (see `studio-checklist.md`).
 16. Power test: pull the plug. HA, Tailscale and the VM must be back within 5 minutes without touching anything.
 
 ## C. Router (S0.1.1 to S0.1.3, S0.1.5)

@@ -1,6 +1,15 @@
 # Mac Studio checklist (Phase 2, E2.1)
 
+Only for the **Mac mini + Mac Studio** setup. With the Mac mini only, skip this file: the agent service runs on the hub Mac and workspaces on a rented VM.
+
 Same baseline as the hub Mac, with three differences: FileVault is **on**, the UPS shuts it down **first**, and it holds agent data, so it never gets personal accounts either.
+
+| Runs on | After this checklist |
+|---|---|
+| Hub Mac (unchanged) | Home Assistant VM, Zigbee, Vaultwarden, Uptime Kuma, Tailscale, egress routes, credential broker |
+| Moves to the Studio | Agent service and NATS (from `home-agents/deploy/hub/`), harness |
+| New on the Studio | Local models (MLX), voice server (LiveKit, Whisper, Piper), SearXNG, Docker workspaces, Tart macOS VMs |
+| Retired | The rented workspace VM, after a week of both running |
 
 1. Confirm the memory option and Apple Canada's price in CAD before ordering (256 GB suggested).
 2. Set up as new with no Apple ID. Admin password from the vault. Wired Ethernet on Main with a DHCP reservation.
