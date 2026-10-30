@@ -31,9 +31,10 @@ This checklist is the same for both setups (see the README): the hub Mac is set 
 11. Install OrbStack; `cd services && cp .env.example .env`, set `VAULT_DOMAIN`, `docker compose up -d`, `./tailscale-serve.sh`.
 12. Create your vault account: `VAULT_SIGNUPS_ALLOWED=true docker compose up -d vaultwarden`, sign up in the Bitwarden app on your phone (server URL = the vault address), then `docker compose up -d vaultwarden` again so sign-ups close. Import your browser's password export, delete the export file, turn off browser password saving.
 13. Uptime Kuma (tailnet address, port 3443): add checks for HA, Vaultwarden, Tailscale and an internet target.
-14. `./scripts/check-listeners.sh` must pass.
-15. Buy a UPS (CA$140 to 285) for the hub Mac, the router and the Zigbee stick; connect it by USB and set shutdown at 20% in Energy > UPS. **Mac mini + Mac Studio:** size the UPS for the Studio's rated power too, and give it its own USB link so it shuts down first (see `studio-checklist.md`).
-16. Power test: pull the plug. HA, Tailscale and the VM must be back within 5 minutes without touching anything.
+14. Monitoring and alarms: follow "Set up" in `services/monitoring/README.md` (node_exporter and security checks, the HA webhook, then the Docker stack). Add Uptime Kuma checks for Prometheus, Alertmanager and Grafana, and send yourself a test alert. **Mac mini only:** the whole stack runs here. **Mac mini + Mac Studio:** the same, then `docs/studio-checklist.md` moves Loki and Grafana to the Studio.
+15. `./scripts/check-listeners.sh` must pass.
+16. Buy a UPS (CA$140 to 285) for the hub Mac, the router and the Zigbee stick; connect it by USB and set shutdown at 20% in Energy > UPS. **Mac mini + Mac Studio:** size the UPS for the Studio's rated power too, and give it its own USB link so it shuts down first (see `studio-checklist.md`).
+17. Power test: pull the plug. HA, Tailscale and the VM must be back within 5 minutes without touching anything.
 
 ## C. Router (S0.1.1 to S0.1.3, S0.1.5)
 

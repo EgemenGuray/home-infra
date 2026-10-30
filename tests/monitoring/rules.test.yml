@@ -1,0 +1,273 @@
+# Unit tests for the Prometheus alert rules: `promtool test rules rules.test.yml` (run.sh does it).
+# Each case feeds fake series and says which alerts must fire, with which labels and summary.
+rule_files:
+  - ../../services/monitoring/prometheus/rules/host.yml
+  - ../../services/monitoring/prometheus/rules/containers.yml
+  - ../../services/monitoring/prometheus/rules/house.yml
+  - ../../services/monitoring/prometheus/rules/agents.yml
+  - ../../services/monitoring/prometheus/rules/security.yml
+  - ../../services/monitoring/prometheus/rules/meta.yml
+evaluation_interval: 1m
+
+tests:
+  # Host -------------------------------------------------------------------------------------
+  - name: host down only after 5 minutes
+    interval: 1m
+    input_series:
+      - series: 'up{job="node", host="hub", instance="h:9100"}'
+        values: '1 0x10'
+    alert_rule_test:
+      - {eval_time: 4m, alertname: HostDown, exp_alerts: []}
+      - eval_time: 7m
+        alertname: HostDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: node, host: hub, instance: "h:9100"}
+            exp_annotations: {summary: "hub Mac is not reporting (node_exporter down or Mac offline)"}
+
+  - name: disk low and critical on the data volume
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="node", host="hub", mountpoint="/System/Volumes/Data"}'
+        values: '8x30'
+      - series: 'node_filesystem_size_bytes{job="node", host="hub", mountpoint="/System/Volumes/Data"}'
+        values: '100x30'
+      - series: 'node_filesystem_avail_bytes{job="node", host="hub", mountpoint="/Volumes/Backup"}'
+        values: '1x30'
+      - series: 'node_filesystem_size_bytes{job="node", host="hub", mountpoint="/Volumes/Backup"}'
+        values: '100x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HostDiskLow
+        exp_alerts:
+          - exp_labels: {severity: warning, job: node, host: hub, mountpoint: /System/Volumes/Data}
+            exp_annotations: {summary: "hub disk under 10% free (8%)"}
+      - {eval_time: 20m, alertname: HostDiskCritical, exp_alerts: []}
+
+  - name: swap pressure needs 30 minutes
+    interval: 1m
+    input_series:
+      - series: 'node_memory_swap_used_bytes{job="node", host="hub"}'
+        values: '3221225472x40'
+    alert_rule_test:
+      - {eval_time: 20m, alertname: HostMemoryPressure, exp_alerts: []}
+      - eval_time: 35m
+        alertname: HostMemoryPressure
+        exp_alerts:
+          - exp_labels: {severity: warning, job: node, host: hub}
+            exp_annotations: {summary: "hub is using 3GiB of swap"}
+
+  - name: reboot is reported
+    interval: 1m
+    input_series:
+      - series: 'node_boot_time_seconds{job="node", host="studio"}'
+        values: '0x5'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HostRebooted
+        exp_alerts:
+          - exp_labels: {severity: warning, job: node, host: studio}
+            exp_annotations: {summary: "studio restarted 5m 0s ago"}
+
+  # Containers ---------------------------------------------------------------------------------
+  - name: missing vault container
+    interval: 1m
+    input_series:
+      - series: 'container_last_seen{name="uptime-kuma"}'
+        values: '1x10'
+      - series: 'container_last_seen{name="monitoring-alertmanager-1"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: CoreContainerMissing
+        exp_alerts:
+          - exp_labels: {severity: critical, name: vaultwarden}
+            exp_annotations: {summary: "A core container (vault, Uptime Kuma or Alertmanager) is not running"}
+
+  - name: no missing container when all run
+    interval: 1m
+    input_series:
+      - {series: 'container_last_seen{name="vaultwarden"}', values: '1x10'}
+      - {series: 'container_last_seen{name="uptime-kuma"}', values: '1x10'}
+      - {series: 'container_last_seen{name="monitoring-alertmanager-1"}', values: '1x10'}
+    alert_rule_test:
+      - {eval_time: 8m, alertname: CoreContainerMissing, exp_alerts: []}
+
+  - name: restart loop
+    interval: 1m
+    input_series:
+      - series: 'container_start_time_seconds{name="ntfy", host="hub"}'
+        values: '100 100 200 200 300 300 400 400'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: ContainerRestarting
+        exp_alerts:
+          - exp_labels: {severity: warning, name: ntfy, host: hub}
+            exp_annotations: {summary: "ntfy on hub restarted 3 times in 30 minutes"}
+
+  - name: container near memory limit, unlimited containers ignored
+    interval: 1m
+    input_series:
+      - {series: 'container_memory_working_set_bytes{name="loki", host="hub"}', values: '95x20'}
+      - {series: 'container_spec_memory_limit_bytes{name="loki", host="hub"}', values: '100x20'}
+      - {series: 'container_memory_working_set_bytes{name="free", host="hub"}', values: '95x20'}
+      - {series: 'container_spec_memory_limit_bytes{name="free", host="hub"}', values: '0x20'}
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: ContainerNearMemoryLimit
+        exp_alerts:
+          - exp_labels: {severity: warning, name: loki, host: hub}
+            exp_annotations: {summary: "loki is at 95% of its memory limit"}
+
+  # House --------------------------------------------------------------------------------------
+  - name: Home Assistant down goes to ntfy
+    interval: 1m
+    input_series:
+      - series: 'up{job="home-assistant", host="ha-vm", instance="ha:8123"}'
+        values: '0x5'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HomeAssistantDown
+        exp_alerts:
+          - exp_labels: {severity: critical, notify: ntfy, job: home-assistant, host: ha-vm, instance: "ha:8123"}
+            exp_annotations: {summary: "Home Assistant is not answering (VM down, HA restarting, or the token expired)"}
+
+  - name: Uptime Kuma check down
+    interval: 1m
+    input_series:
+      - series: 'monitor_status{job="uptime-kuma", monitor_name="Internet"}'
+        values: '0x6'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: UptimeKumaCheckDown
+        exp_alerts:
+          - exp_labels: {severity: warning, job: uptime-kuma, monitor_name: Internet}
+            exp_annotations: {summary: "Uptime Kuma check 'Internet' is down"}
+
+  # Agents and spend ---------------------------------------------------------------------------
+  - name: spend below every line
+    interval: 1m
+    input_series:
+      - {series: 'home_agents_spend_cad{period="day", instance="a"}', values: '1x3'}
+      - {series: 'home_agents_spend_limit_cad{period="day", instance="a"}', values: '5x3'}
+      - {series: 'home_agents_spend_cad{period="month", instance="a"}', values: '20x3'}
+      - {series: 'home_agents_spend_limit_cad{period="month", instance="a"}', values: '70x3'}
+    alert_rule_test:
+      - {eval_time: 2m, alertname: SpendDailyAlert, exp_alerts: []}
+      - {eval_time: 2m, alertname: SpendNearMonthlyCap, exp_alerts: []}
+      - {eval_time: 2m, alertname: SpendCapReached, exp_alerts: []}
+
+  - name: spend over the daily line and near the cap
+    interval: 1m
+    input_series:
+      - {series: 'home_agents_spend_cad{period="day", instance="a"}', values: '6.5x3'}
+      - {series: 'home_agents_spend_limit_cad{period="day", instance="a"}', values: '5x3'}
+      - {series: 'home_agents_spend_cad{period="month", instance="a"}', values: '63x3'}
+      - {series: 'home_agents_spend_limit_cad{period="month", instance="a"}', values: '70x3'}
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: SpendDailyAlert
+        exp_alerts:
+          - exp_labels: {severity: warning, period: day, instance: a}
+            exp_annotations: {summary: "Model spend today is CA$6.50, over the daily alert line"}
+      - eval_time: 2m
+        alertname: SpendNearMonthlyCap
+        exp_alerts:
+          - exp_labels: {severity: warning, period: month, instance: a}
+            exp_annotations: {summary: "Model spend is at 90% of the monthly cap"}
+      - {eval_time: 2m, alertname: SpendCapReached, exp_alerts: []}
+
+  - name: monthly cap reached is critical
+    interval: 1m
+    input_series:
+      - {series: 'home_agents_spend_cad{period="month", instance="a"}', values: '70.4x3'}
+      - {series: 'home_agents_spend_limit_cad{period="month", instance="a"}', values: '70x3'}
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: SpendCapReached
+        exp_alerts:
+          - exp_labels: {severity: critical, period: month, instance: a}
+            exp_annotations: {summary: "Monthly spend cap reached (CA$70.40); cloud models are off until next month"}
+
+  - name: approval waiting over an hour
+    interval: 1m
+    input_series:
+      - {series: 'home_agents_approval_oldest_seconds', values: '3000 3700'}
+    alert_rule_test:
+      - {eval_time: 0m, alertname: ApprovalWaiting, exp_alerts: []}
+      - eval_time: 1m
+        alertname: ApprovalWaiting
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations: {summary: "An agent has waited 1h 1m 40s for your approval"}
+
+  - name: failing tasks
+    interval: 5m
+    input_series:
+      - {series: 'home_agents_tasks{state="failed"}', values: '2 2 2 3 4 5 6 6 6 6 6 6 6'}
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: AgentTasksFailing
+        exp_alerts:
+          - exp_labels: {severity: warning, state: failed}
+            exp_annotations: {summary: "4 agent tasks failed in the last hour"}
+
+  # Security -----------------------------------------------------------------------------------
+  - name: one failed login warns, a burst is critical
+    interval: 5m
+    input_series:
+      - series: 'home_security_failed_logins_total{job="node", host="hub"}'
+        values: '0 0 1 4 8 12'
+    alert_rule_test:
+      - {eval_time: 5m, alertname: MacFailedLogins, exp_alerts: []}
+      - eval_time: 10m
+        alertname: MacFailedLogins
+        exp_alerts:
+          - exp_labels: {severity: warning, job: node, host: hub}
+            exp_annotations: {summary: "Failed logins on the hub Mac in the last 10 minutes"}
+      - eval_time: 25m
+        alertname: MacFailedLoginsBurst
+        exp_alerts:
+          - exp_labels: {severity: critical, job: node, host: hub}
+            exp_annotations: {summary: "About 12 failed logins on the hub Mac in 30 minutes; someone may be guessing"}
+
+  - name: exposed port and funnel fire at once
+    interval: 1m
+    input_series:
+      - {series: 'home_security_exposed_listeners{host="hub"}', values: '0 2'}
+      - {series: 'home_security_funnel_on{host="hub"}', values: '0 1'}
+    alert_rule_test:
+      - {eval_time: 0m, alertname: PortExposed, exp_alerts: []}
+      - eval_time: 1m
+        alertname: PortExposed
+        exp_alerts:
+          - exp_labels: {severity: critical, host: hub}
+            exp_annotations: {summary: "2 service(s) on the hub Mac listen on the LAN or internet"}
+      - eval_time: 1m
+        alertname: TailscaleFunnelOn
+        exp_alerts:
+          - exp_labels: {severity: critical, host: hub}
+            exp_annotations: {summary: "Tailscale Funnel is on for the hub Mac; services may be public"}
+
+  - name: checks that stop running are noticed
+    interval: 5m
+    input_series:
+      - {series: 'home_security_checks_last_run_timestamp_seconds{host="hub"}', values: '0x12'}
+    alert_rule_test:
+      - {eval_time: 25m, alertname: SecurityChecksStale, exp_alerts: []}
+      - eval_time: 35m
+        alertname: SecurityChecksStale
+        exp_alerts:
+          - exp_labels: {severity: warning, host: hub}
+            exp_annotations: {summary: "Security checks on the hub Mac have not run for 35m 0s"}
+
+  # Meta ---------------------------------------------------------------------------------------
+  - name: HA push failures go to ntfy
+    interval: 1m
+    input_series:
+      - {series: 'alertmanager_notifications_failed_total{integration="webhook"}', values: '0 0 1 2'}
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AlertDeliveryFailing
+        exp_alerts:
+          - exp_labels: {severity: warning, notify: ntfy, integration: webhook}
+            exp_annotations: {summary: "Alertmanager could not deliver 2 alert(s) through Home Assistant"}

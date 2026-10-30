@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Failed logins, exposed ports, Funnel, firewall and Remote Login, every 5 minutes, as root. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>home.hub.security-checks</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/libexec/home-hub/security-checks.sh</string>
+  </array>
+  <key>StartInterval</key><integer>300</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardErrorPath</key><string>/usr/local/var/log/home-hub/security-checks.err</string>
+</dict>
+</plist>

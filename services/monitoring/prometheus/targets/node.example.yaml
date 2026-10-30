@@ -1,0 +1,7 @@
+# Copy to node.yaml. Mac mini only: leave the list empty ([]).
+# Mac mini + Mac Studio: the Studio's node_exporter, published on the tailnet by its
+# tailscale-serve step. Use the Studio's tailnet name (or its 100.x address if MagicDNS
+# does not resolve inside Docker).
+[]
+# - targets: ["studio.example-tailnet.ts.net:9143"]
+#   labels: {host: studio, __scheme__: https}

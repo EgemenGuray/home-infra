@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- node_exporter for the monitoring stack. Localhost only; on the Mac Studio, studio-serve.sh
+     publishes it to the tailnet. install-monitoring.sh fills in the binary path and user. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>home.hub.node-exporter</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__NODE_EXPORTER__</string>
+    <string>--web.listen-address=127.0.0.1:9100</string>
+    <string>--collector.textfile.directory=/usr/local/var/node_exporter/textfile</string>
+    <string>--no-collector.wifi</string>
+  </array>
+  <key>UserName</key><string>__USER__</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardErrorPath</key><string>/usr/local/var/log/home-hub/node-exporter.err</string>
+</dict>
+</plist>

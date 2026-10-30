@@ -1,0 +1,58 @@
+# Alertmanager on the Mac mini, in both setups (it must keep working when the Studio is off).
+# Two push paths to the phone:
+#   ha-push: Home Assistant webhook -> notify.owner_phone (home-assistant-config
+#            packages/monitoring.yaml). Normal path; respects quiet hours for warnings.
+#   ntfy:    self-hosted ntfy on the tailnet. Used for critical alerts (as a second copy) and for
+#            anything about HA itself or the HA push path (label notify="ntfy").
+# The HA webhook URL and the ntfy token are read from secrets/ (git-ignored), never written here.
+global:
+  resolve_timeout: 10m
+
+route:
+  receiver: ha-push
+  group_by: [alertname, host]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: ['notify="ntfy"']
+      receiver: ntfy
+      repeat_interval: 1h
+    - matchers: ['severity="critical"']
+      receiver: ha-push
+      repeat_interval: 1h
+      continue: true
+    - matchers: ['severity="critical"']
+      receiver: ntfy
+      repeat_interval: 1h
+
+inhibit_rules:
+  # A Mac that is down explains everything else on it.
+  - source_matchers: ['alertname="HostDown"']
+    target_matchers: ['severity="warning"']
+    equal: [host]
+  # Hard cap reached makes the 80% warning noise.
+  - source_matchers: ['alertname="SpendCapReached"']
+    target_matchers: ['alertname=~"SpendNearMonthlyCap|SpendDailyAlert"']
+  - source_matchers: ['alertname="HostDiskCritical"']
+    target_matchers: ['alertname="HostDiskLow"']
+    equal: [host]
+  - source_matchers: ['alertname="MacFailedLoginsBurst"']
+    target_matchers: ['alertname="MacFailedLogins"']
+    equal: [host]
+
+receivers:
+  - name: ha-push
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/ha-webhook-url
+        send_resolved: true
+        max_alerts: 10
+
+  - name: ntfy
+    webhook_configs:
+      # ntfy's built-in Alertmanager template (v2.14+) turns the payload into a readable message.
+      - url: http://ntfy/home-alerts?template=alertmanager
+        send_resolved: true
+        max_alerts: 10
+        http_config:
+          authorization: {credentials_file: /etc/alertmanager/secrets/ntfy-token}

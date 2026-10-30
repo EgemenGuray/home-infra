@@ -1,26 +1,153 @@
-# E2.6 (and useful from Phase 0): host dashboards and a second uptime watcher.
-# Run on both Macs: each one's Uptime Kuma watches the other, and Beszel's hub on one Mac
-# collects CPU, memory, disk and temperature from agents on both. Localhost only; published
-# to the tailnet with tailscale serve.
+# Monitoring, logs and alarms on the Mac mini (the hub Mac). See README.md for both setups.
+#   Mac mini only:          COMPOSE_PROFILES=ui   (everything here, including Loki and Grafana)
+#   Mac mini + Mac Studio:  COMPOSE_PROFILES=     (Loki and Grafana run on the Studio instead,
+#                           from studio/compose.yaml; alerting stays here so it survives the
+#                           Studio being off or locked after a power cut)
+# Every port binds to 127.0.0.1. tailscale-serve.sh publishes Grafana and ntfy to the tailnet.
+# Memory limits add up to about 1.1 GB on an 8 GB Mac; typical use is about half that.
+# Usage: ./setup.sh, fill .env and secrets/, then docker compose up -d
 name: monitoring
 
-services:
-  beszel-hub:
-    image: henrygd/beszel:0.9.1
-    restart: unless-stopped
-    volumes: ["beszel-data:/beszel_data"]
-    ports: ["127.0.0.1:8090:8090"]
-    mem_limit: 128m
+x-hosts: &hosts
+  extra_hosts: ["host.docker.internal:host-gateway"]
 
-  beszel-agent:
-    image: henrygd/beszel-agent:0.9.1
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
     restart: unless-stopped
-    network_mode: host
-    volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"]
-    environment:
-      LISTEN: 127.0.0.1:45876
-      KEY: ${BESZEL_AGENT_PUBLIC_KEY:?copy the public key shown in the hub}
+    <<: *hosts
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROM_RETENTION_TIME:-15d}
+      - --storage.tsdb.retention.size=${PROM_RETENTION_SIZE:-1GB}
+      - --web.listen-address=:9090
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - ./prometheus/targets:/etc/prometheus/targets:ro
+      - ./secrets:/etc/prometheus/secrets:ro
+      - prometheus-data:/prometheus
+    ports: ["127.0.0.1:9090:9090"]
+    mem_limit: 320m
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    restart: unless-stopped
+    <<: *hosts
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --data.retention=120h
+      - --cluster.listen-address=   # single node; no gossip port
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./secrets:/etc/alertmanager/secrets:ro
+      - alertmanager-data:/alertmanager
+    ports: ["127.0.0.1:9093:9093"]
     mem_limit: 64m
 
+  ntfy:
+    # Fallback push channel for when Home Assistant itself is down. Login required for everything.
+    image: binwiederhier/ntfy:v2.14.0
+    restart: unless-stopped
+    command: ["serve"]
+    environment:
+      NTFY_BASE_URL: ${NTFY_BASE_URL:?set NTFY_BASE_URL in .env}
+      NTFY_LISTEN_HTTP: ":80"
+      NTFY_BEHIND_PROXY: "true"
+      NTFY_AUTH_FILE: /var/lib/ntfy/user.db
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+      NTFY_CACHE_DURATION: 72h
+      NTFY_ENABLE_LOGIN: "true"
+      # iOS only wakes instantly through the public relay; it carries a message id, never the text.
+      NTFY_UPSTREAM_BASE_URL: https://ntfy.sh
+    volumes: ["ntfy-data:/var/lib/ntfy"]
+    ports: ["127.0.0.1:2586:80"]
+    mem_limit: 48m
+
+  cadvisor:
+    # Per-container CPU, memory and restarts from the Docker VM (OrbStack or Docker Desktop).
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    restart: unless-stopped
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+      - --store_container_labels=false
+      - --whitelisted_container_labels=com.docker.compose.project,com.docker.compose.service
+      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp,disk,diskIO
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports: ["127.0.0.1:8081:8080"]
+    mem_limit: 96m
+
+  alloy:
+    # Ships Docker container logs and the Mac's security log to Loki (here, or on the Studio).
+    image: grafana/alloy:v1.10.0
+    restart: unless-stopped
+    <<: *hosts
+    command: ["run", "--storage.path=/var/lib/alloy", "--server.http.listen-addr=0.0.0.0:12345", "/etc/alloy/config.alloy"]
+    environment:
+      LOKI_URL: ${LOKI_URL:-http://loki:3100/loki/api/v1/push}
+      HOST_ROLE: ${HOST_ROLE:-hub}
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${HOST_LOG_DIR:-/usr/local/var/log/home-hub}:/var/log/home-hub:ro
+      - alloy-data:/var/lib/alloy
+    ports: ["127.0.0.1:12345:12345"]
+    mem_limit: 128m
+
+  loki:
+    profiles: ["ui"]
+    image: grafana/loki:3.5.3
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml", "-config.expand-env=true"]
+    environment:
+      LOKI_RETENTION: ${LOKI_RETENTION:-168h}
+      ALERTMANAGER_URL: http://alertmanager:9093
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - ./loki/rules:/etc/loki/rules:ro
+      - loki-data:/loki
+    ports: ["127.0.0.1:3100:3100"]
+    mem_limit: 256m
+
+  grafana:
+    profiles: ["ui"]
+    image: grafana/grafana:12.1.0
+    restart: unless-stopped
+    environment:
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:?set GRAFANA_ROOT_URL in .env}
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets-local/grafana-admin-password
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      PROMETHEUS_URL: ${PROMETHEUS_URL:-http://prometheus:9090}
+      ALERTMANAGER_URL: ${ALERTMANAGER_URL:-http://alertmanager:9093}
+      LOKI_QUERY_URL: ${LOKI_QUERY_URL:-http://loki:3100}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./secrets/grafana-admin-password:/run/secrets-local/grafana-admin-password:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["127.0.0.1:3000:3000"]
+    mem_limit: 192m
+
 volumes:
-  beszel-data:
+  prometheus-data:
+  alertmanager-data:
+  ntfy-data:
+  alloy-data:
+  loki-data:
+  grafana-data:

@@ -1,0 +1,37 @@
+# Docker containers, from cAdvisor. Container names come from compose (container_name, or
+# <project>-<service>-1).
+groups:
+  - name: containers
+    rules:
+      - alert: CadvisorDown
+        expr: up{job="cadvisor"} == 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Container metrics on {{ $labels.host }} are missing (cAdvisor down)"
+
+      - alert: CoreContainerMissing
+        # The ones the house depends on. Absent for 5 minutes = stopped, crashed or removed.
+        expr: |
+          absent(container_last_seen{name="vaultwarden"})
+          or absent(container_last_seen{name="uptime-kuma"})
+          or absent(container_last_seen{name="monitoring-alertmanager-1"})
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "A core container (vault, Uptime Kuma or Alertmanager) is not running"
+
+      - alert: ContainerRestarting
+        expr: changes(container_start_time_seconds{name!=""}[30m]) >= 3
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.name }} on {{ $labels.host }} restarted {{ $value }} times in 30 minutes"
+
+      - alert: ContainerNearMemoryLimit
+        expr: |
+          container_memory_working_set_bytes{name!=""}
+            / (container_spec_memory_limit_bytes{name!=""} > 0) > 0.9
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.name }} is at {{ $value | humanizePercentage }} of its memory limit"

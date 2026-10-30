@@ -13,7 +13,7 @@ The house runs the same way in both setups. The difference is where the AI side 
 | Mac mini (hub Mac) | Home Assistant VM, Zigbee, Vaultwarden, Uptime Kuma, Tailscale, egress routes, and the agent service with NATS (cloud models only) | Home Assistant VM, Zigbee, Vaultwarden, Uptime Kuma, Tailscale, egress routes and the credential broker. Nothing else. |
 | Mac Studio | Not present | Agent service, NATS, harness, local models, voice server, Docker workspaces and macOS VMs |
 | Agent workspaces | A rented Linux VM on the tailnet (`home-agents/deploy/workspace-host/`) | On the Studio; the rented VM is cancelled |
-| Monitoring | Uptime Kuma on the hub Mac | Uptime Kuma and Beszel on both Macs, each watching the other |
+| Monitoring | Prometheus, Alertmanager, ntfy, Loki and Grafana on the hub Mac, next to Uptime Kuma | Alerting (Prometheus, Alertmanager, ntfy) stays on the hub Mac; Loki and Grafana move to the Studio; exporters and security checks on both; Uptime Kuma on each watching the other |
 | UPS shutdown | The hub Mac at 20% | The Studio at 50% first, the hub Mac at 20% |
 | Install | `docs/hands-on-checklist.md` | `docs/hands-on-checklist.md`, then `docs/studio-checklist.md` |
 
@@ -34,7 +34,9 @@ The **Setup** column says where each piece applies: **Both**, or **+ Studio** fo
 | `tailscale/policy.hujson.example` | Tailnet access rules: only your phone and laptop reach admin ports. | Both | S0.1.4, S0.1.5 |
 | `scripts/check-listeners.sh` | Run on the hub Mac: fails if anything listens on a non-loopback, non-tailnet address. | Both | S0.1.5 |
 | `scripts/external-port-scan.sh` | Run from outside the house: scans the static IP and expects zero open ports. | Both | S0.1.5 |
-| `services/monitoring/` | Beszel host dashboards and a second Uptime Kuma, so the two Macs watch each other. | + Studio | E2.6 |
+| `services/monitoring/` | Prometheus, Grafana, Loki and Alertmanager with alarms to your phone (HA push, ntfy fallback). Its README says what runs on which Mac in each setup. | Both | E0.2, E2.6 |
+| `macos/install-monitoring.sh` + `macos/security-checks.sh` | node_exporter and 5-minute checks for failed logins, exposed ports, Funnel, firewall and Remote Login. On the Mac mini; on the Studio too in the second setup. | Both | S0.1.5, E2.6 |
+| `services/monitoring/studio/` | The Studio's part of monitoring: Loki and Grafana move here, plus its own exporters. | + Studio | E2.6 |
 | `docs/studio-checklist.md` | Mac Studio bring-up: same baseline, FileVault on, shuts down first on the UPS. | + Studio | E2.1 |
 | `docs/phase-3.md` | Backup internet line and a hot spare. | Both | E3.2 |
 | `docs/hands-on-checklist.md` | Every step that needs your hands on the hub Mac, the router or your accounts, in order. | Both | E0.1, E0.2 |
@@ -52,7 +54,8 @@ Steps 1 to 6 are the same in both setups.
 4. Install Tailscale (standalone package), UTM and OrbStack; create the HA VM; `sudo ./macos/install-launchd.sh`.
 5. `cp services/.env.example services/.env`, fill it, `docker compose -f services/compose.yaml up -d`, then `./services/tailscale-serve.sh`.
 6. `./scripts/check-listeners.sh` on the hub Mac and `./scripts/external-port-scan.sh` from mobile data. Both must pass.
-7. **Mac mini only:** for agents, set up `services/egress/` here and the rented workspace VM from home-agents. **Mac mini + Mac Studio:** set up `services/egress/` here, then follow `docs/studio-checklist.md`, which also runs `services/monitoring/` on both Macs.
+7. **Mac mini only:** for agents, set up `services/egress/` here and the rented workspace VM from home-agents. **Mac mini + Mac Studio:** set up `services/egress/` here, then follow `docs/studio-checklist.md`, which also switches `services/monitoring/` to its Mac mini + Mac Studio setup.
+8. Monitoring and alarms: follow `services/monitoring/README.md` for your setup.
 
 Every script supports `--dry-run` where it changes settings, and prints what it would do.
 

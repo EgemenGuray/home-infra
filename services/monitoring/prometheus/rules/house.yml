@@ -1,0 +1,33 @@
+# Home Assistant and Uptime Kuma. Alerts about HA itself go to ntfy (notify="ntfy"), since the
+# usual push path runs through HA.
+groups:
+  - name: house
+    rules:
+      - alert: HomeAssistantDown
+        expr: up{job="home-assistant"} == 0
+        for: 3m
+        labels: {severity: critical, notify: ntfy}
+        annotations:
+          summary: "Home Assistant is not answering (VM down, HA restarting, or the token expired)"
+
+      - alert: HomeAssistantEntitiesUnavailable
+        # Many devices dropping at once usually means a hub, Zigbee or Wi-Fi problem.
+        expr: count(hass_entity_available == 0) > 15
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $value }} Home Assistant entities are unavailable"
+
+      - alert: UptimeKumaCheckDown
+        expr: monitor_status{job="uptime-kuma"} == 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Uptime Kuma check '{{ $labels.monitor_name }}' is down"
+
+      - alert: UptimeKumaDown
+        expr: up{job="uptime-kuma"} == 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Uptime Kuma is not answering"

@@ -1,0 +1,24 @@
+# Log-based security alerts. Evaluated by Loki's ruler, delivered by the Mac mini's Alertmanager.
+groups:
+  - name: security-logs
+    rules:
+      - alert: VaultwardenFailedLogin
+        expr: |
+          sum(count_over_time({container="vaultwarden"} |= "Username or password is incorrect" [10m])) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "Failed login(s) on the password vault in the last 10 minutes"
+
+      - alert: VaultwardenFailedLoginBurst
+        expr: |
+          sum(count_over_time({container="vaultwarden"} |= "Username or password is incorrect" [30m])) >= 5
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $value }} failed vault logins in 30 minutes; someone may be guessing"
+
+      - alert: VaultwardenAdminAccess
+        expr: |
+          sum(count_over_time({container="vaultwarden"} |~ "(?i)admin.*(login|token)" [10m])) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "Someone used the vault's admin page"

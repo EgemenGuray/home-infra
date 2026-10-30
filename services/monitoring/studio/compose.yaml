@@ -1,0 +1,88 @@
+# Mac mini + Mac Studio setup only: the Studio's part of the monitoring stack.
+# The Studio holds the heavier, storage-hungry pieces (Loki with longer retention, Grafana) and
+# its own log shipper and container metrics. Prometheus, Alertmanager and ntfy stay on the
+# Mac mini, so alarms still reach the phone when the Studio is off or waiting for its FileVault
+# unlock. node_exporter runs natively (macos/install-monitoring.sh), like on the Mac mini.
+# Ports bind to 127.0.0.1; studio-serve.sh publishes Grafana, Loki, node_exporter and cAdvisor
+# to the tailnet, and the tailnet policy lets only the Mac mini and your devices reach them.
+# Usage (on the Studio, from services/monitoring/):
+#   cp studio/.env.example studio/.env   (fill in)   then
+#   docker compose -f studio/compose.yaml --env-file studio/.env up -d
+name: monitoring-studio
+
+services:
+  loki:
+    image: grafana/loki:3.5.3
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml", "-config.expand-env=true"]
+    environment:
+      LOKI_RETENTION: ${LOKI_RETENTION:-720h}
+      ALERTMANAGER_URL: ${ALERTMANAGER_URL:?set ALERTMANAGER_URL in studio/.env}
+    volumes:
+      - ../loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - ../loki/rules:/etc/loki/rules:ro
+      - loki-data:/loki
+    ports: ["127.0.0.1:3100:3100"]
+    mem_limit: 1g
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    restart: unless-stopped
+    environment:
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:?set GRAFANA_ROOT_URL in studio/.env}
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets-local/grafana-admin-password
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      PROMETHEUS_URL: ${PROMETHEUS_URL:?set PROMETHEUS_URL in studio/.env}
+      ALERTMANAGER_URL: ${ALERTMANAGER_URL}
+      LOKI_QUERY_URL: http://loki:3100
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../secrets/grafana-admin-password:/run/secrets-local/grafana-admin-password:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["127.0.0.1:3000:3000"]
+    mem_limit: 512m
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    restart: unless-stopped
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+      - --store_container_labels=false
+      - --whitelisted_container_labels=com.docker.compose.project,com.docker.compose.service
+      - --disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,process,referenced_memory,resctrl,sched,tcp,udp,disk,diskIO
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports: ["127.0.0.1:8081:8080"]
+    mem_limit: 128m
+
+  alloy:
+    image: grafana/alloy:v1.10.0
+    restart: unless-stopped
+    command: ["run", "--storage.path=/var/lib/alloy", "--server.http.listen-addr=0.0.0.0:12345", "/etc/alloy/config.alloy"]
+    environment:
+      LOKI_URL: http://loki:3100/loki/api/v1/push
+      HOST_ROLE: studio
+    volumes:
+      - ../alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${HOST_LOG_DIR:-/usr/local/var/log/home-hub}:/var/log/home-hub:ro
+      - alloy-data:/var/lib/alloy
+    ports: ["127.0.0.1:12345:12345"]
+    mem_limit: 128m
+
+volumes:
+  loki-data:
+  grafana-data:
+  alloy-data:

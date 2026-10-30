@@ -1,0 +1,64 @@
+// Grafana Alloy: ships logs to Loki. Same file on the Mac mini and the Mac Studio.
+// LOKI_URL: http://loki:3100/... when Loki runs on this Mac, or the Studio's tailnet URL.
+// HOST_ROLE: hub or studio, added as the `host` label.
+
+// Docker container logs, labelled with the container and compose service.
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "30s"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "project"
+  }
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  relabel_rules = discovery.relabel.containers.rules
+  forward_to    = [loki.process.common.receiver]
+}
+
+// The Mac's own security log, written by macos/security-checks.sh (failed logins, listener
+// and Funnel checks), so you can see who and what behind a security alert.
+local.file_match "host" {
+  path_targets = [{"__path__" = "/var/log/home-hub/*.log", "job" = "macos"}]
+}
+
+loki.source.file "host" {
+  targets    = local.file_match.host.targets
+  forward_to = [loki.process.common.receiver]
+}
+
+loki.process "common" {
+  // Never ship tokens if a container prints one by mistake.
+  stage.replace {
+    expression = "(?i)(bearer\\s+|token[=:]\\s*|password[=:]\\s*)([^\\s\"']+)"
+    replace    = "<redacted>"
+  }
+  stage.static_labels {
+    values = {host = sys.env("HOST_ROLE")}
+  }
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = sys.env("LOKI_URL")
+  }
+  external_labels = {}
+}

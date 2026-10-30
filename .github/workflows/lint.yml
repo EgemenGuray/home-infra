@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck
-        run: shellcheck -S warning macos/*.sh macos/launchd/*.sh services/*.sh scripts/*.sh
+        run: shellcheck -S warning macos/*.sh macos/launchd/*.sh services/*.sh services/monitoring/*.sh services/monitoring/studio/*.sh scripts/*.sh tests/monitoring/*.sh
       - name: compose config
         run: |
           cp services/.env.example services/.env
