@@ -56,6 +56,17 @@ Steps 1 to 6 are the same in both setups.
 
 Every script supports `--dry-run` where it changes settings, and prints what it would do.
 
+## Tests
+
+`pip install -r requirements-test.txt && pytest` runs the scripts on Linux against stub commands, so it needs no Mac, router or network. The tests cover these points:
+
+- The port, route and listener checks fail when they should.
+- Dry runs change nothing.
+- The VM watchdog behaves correctly.
+- Every published port binds to localhost, and nothing turns on Tailscale Funnel.
+
+CI runs them on every push, alongside shellcheck.
+
 ## Rules
 
 See `SECURITY.md`. Run `pre-commit install` after cloning.

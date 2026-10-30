@@ -28,7 +28,7 @@ fi
 echo
 echo "== Personal-account check"
 bad=0
-for home in /Users/*; do
+for home in "${USERS_DIR:-/Users}"/*; do
   u=$(basename "$home"); [[ "$u" == Shared ]] && continue
   if /usr/libexec/PlistBuddy -c 'Print :Accounts:0:AccountID' "$home/Library/Preferences/MobileMeAccounts.plist" >/dev/null 2>&1; then
     echo "FAIL: $u is signed in to an Apple ID. Sign out in System Settings."; bad=1
