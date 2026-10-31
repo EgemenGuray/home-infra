@@ -1,0 +1,4 @@
+# Copy to cadvisor.yaml. Mac mini only: []. With the Studio, its cAdvisor:
+[]
+# - targets: ["studio.example-tailnet.ts.net:9180"]
+#   labels: {host: studio, __scheme__: https}

@@ -1,0 +1,18 @@
+# Same file in both setups; URLs come from the environment (compose.yaml or studio/compose.yaml).
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    url: ${PROMETHEUS_URL}
+    isDefault: true
+    jsonData: {timeInterval: 60s}
+  - name: Loki
+    uid: loki
+    type: loki
+    url: ${LOKI_QUERY_URL}
+  - name: Alertmanager
+    uid: alertmanager
+    type: alertmanager
+    url: ${ALERTMANAGER_URL}
+    jsonData: {implementation: prometheus, handleGrafanaManagedAlerts: false}

@@ -1,0 +1,7 @@
+# Copy to home-agents.yaml.
+# Mac mini only: the agent service runs here (home-agents deploy/hub), so keep this entry.
+# Mac mini + Mac Studio: Phase 2 moves the service to the Studio; point at its tailnet URL.
+- targets: ["host.docker.internal:8700"]
+  labels: {host: hub}
+# - targets: ["studio.example-tailnet.ts.net:8700"]
+#   labels: {host: studio, __scheme__: https}

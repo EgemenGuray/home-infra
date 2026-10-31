@@ -1,0 +1,22 @@
+# The monitoring stack watching itself. Uptime Kuma watches it from outside too (README).
+groups:
+  - name: meta
+    rules:
+      - alert: AlertDeliveryFailing
+        # Pushes through HA failing; the ntfy route still works, so this goes there.
+        expr: increase(alertmanager_notifications_failed_total{integration="webhook"}[15m]) > 0
+        labels: {severity: warning, notify: ntfy}
+        annotations:
+          summary: "Alertmanager could not deliver {{ $value }} alert(s) through Home Assistant"
+
+      - alert: PrometheusRuleFailures
+        expr: increase(prometheus_rule_evaluation_failures_total[15m]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "Some alert rules failed to evaluate"
+
+      - alert: LogShippingFailing
+        expr: increase(loki_write_dropped_entries_total[15m]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "Alloy on {{ $labels.host }} is dropping logs (Loki unreachable?)"

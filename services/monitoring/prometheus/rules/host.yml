@@ -1,0 +1,49 @@
+# Host health of the Macs, from node_exporter (macos/install-monitoring.sh). `host` is hub or studio.
+groups:
+  - name: host
+    rules:
+      - alert: HostDown
+        expr: up{job="node"} == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.host }} Mac is not reporting (node_exporter down or Mac offline)"
+
+      - alert: HostDiskLow
+        expr: |
+          node_filesystem_avail_bytes{job="node", mountpoint=~"/|/System/Volumes/Data"}
+            / node_filesystem_size_bytes{job="node", mountpoint=~"/|/System/Volumes/Data"} < 0.10
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.host }} disk under 10% free ({{ $value | humanizePercentage }})"
+
+      - alert: HostDiskCritical
+        expr: |
+          node_filesystem_avail_bytes{job="node", mountpoint=~"/|/System/Volumes/Data"}
+            / node_filesystem_size_bytes{job="node", mountpoint=~"/|/System/Volumes/Data"} < 0.05
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.host }} disk under 5% free ({{ $value | humanizePercentage }})"
+
+      - alert: HostMemoryPressure
+        # macOS swaps before it runs out; a lot of swap for a while means the 8 GB is too tight.
+        expr: node_memory_swap_used_bytes{job="node"} > 2 * 1024^3
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.host }} is using {{ $value | humanize1024 }}B of swap"
+
+      - alert: HostCpuBusy
+        expr: 1 - avg by (host) (rate(node_cpu_seconds_total{job="node", mode="idle"}[5m])) > 0.9
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.host }} CPU over 90% for 30 minutes"
+
+      - alert: HostRebooted
+        expr: time() - node_boot_time_seconds{job="node"} < 900
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.host }} restarted {{ $value | humanizeDuration }} ago"

@@ -1,0 +1,53 @@
+# Agent service and harness (home-agents /metrics). Spend is in CAD.
+groups:
+  - name: agents
+    rules:
+      - alert: AgentServiceDown
+        expr: up{job="home-agents"} == 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "The agent service on {{ $labels.host }} is not answering"
+
+      - alert: SpendDailyAlert
+        expr: |
+          home_agents_spend_cad{period="day"}
+            >= on (period, instance) home_agents_spend_limit_cad{period="day"}
+        labels: {severity: warning}
+        annotations:
+          summary: "Model spend today is CA${{ $value | printf \"%.2f\" }}, over the daily alert line"
+
+      - alert: SpendNearMonthlyCap
+        expr: |
+          home_agents_spend_cad{period="month"}
+            / on (period, instance) home_agents_spend_limit_cad{period="month"} >= 0.8
+        labels: {severity: warning}
+        annotations:
+          summary: "Model spend is at {{ $value | humanizePercentage }} of the monthly cap"
+
+      - alert: SpendCapReached
+        expr: |
+          home_agents_spend_cad{period="month"}
+            >= on (period, instance) home_agents_spend_limit_cad{period="month"}
+        labels: {severity: critical}
+        annotations:
+          summary: "Monthly spend cap reached (CA${{ $value | printf \"%.2f\" }}); cloud models are off until next month"
+
+      - alert: ApprovalWaiting
+        expr: home_agents_approval_oldest_seconds > 3600
+        labels: {severity: warning}
+        annotations:
+          summary: "An agent has waited {{ $value | humanizeDuration }} for your approval"
+
+      - alert: AgentTasksFailing
+        expr: home_agents_tasks{state="failed"} - home_agents_tasks{state="failed"} offset 1h >= 3
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $value }} agent tasks failed in the last hour"
+
+      - alert: ModelProviderUnavailable
+        expr: home_agents_provider_available == 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "Model provider {{ $labels.provider }} ({{ $labels.location }}) is unreachable"

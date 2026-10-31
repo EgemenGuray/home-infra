@@ -32,3 +32,9 @@ __pycache__/
 venv/
 .pytest_cache/
 services/egress/routes.yaml
+
+# Monitoring: real targets and secret files live only on the Mac
+services/monitoring/secrets/
+services/monitoring/prometheus/targets/*.yaml
+!services/monitoring/prometheus/targets/*.example.yaml
+services/monitoring/studio/.env

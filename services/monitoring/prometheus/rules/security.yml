@@ -1,0 +1,49 @@
+# Security checks written by macos/security-checks.sh every 5 minutes into node_exporter's
+# textfile folder. Failed Vaultwarden logins are a Loki rule (loki/rules/fake/security.yml).
+groups:
+  - name: security
+    rules:
+      - alert: MacFailedLogins
+        expr: increase(home_security_failed_logins_total[10m]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "Failed logins on the {{ $labels.host }} Mac in the last 10 minutes"
+
+      - alert: MacFailedLoginsBurst
+        expr: increase(home_security_failed_logins_total[30m]) >= 10
+        labels: {severity: critical}
+        annotations:
+          summary: "About {{ $value | printf \"%.0f\" }} failed logins on the {{ $labels.host }} Mac in 30 minutes; someone may be guessing"
+
+      - alert: PortExposed
+        # Something listens outside loopback and the tailnet (scripts/check-listeners.sh).
+        expr: home_security_exposed_listeners > 0
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $value }} service(s) on the {{ $labels.host }} Mac listen on the LAN or internet"
+
+      - alert: TailscaleFunnelOn
+        expr: home_security_funnel_on == 1
+        labels: {severity: critical}
+        annotations:
+          summary: "Tailscale Funnel is on for the {{ $labels.host }} Mac; services may be public"
+
+      - alert: FirewallStealthOff
+        expr: home_security_firewall_stealth == 0
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "The {{ $labels.host }} Mac firewall is not in stealth mode"
+
+      - alert: RemoteLoginEnabled
+        expr: home_security_remote_login == 1
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "macOS Remote Login (SSH) is on for the {{ $labels.host }} Mac; use Tailscale SSH"
+
+      - alert: SecurityChecksStale
+        expr: time() - home_security_checks_last_run_timestamp_seconds > 1800
+        labels: {severity: warning}
+        annotations:
+          summary: "Security checks on the {{ $labels.host }} Mac have not run for {{ $value | humanizeDuration }}"

@@ -18,7 +18,7 @@ Same baseline as the hub Mac, with three differences: FileVault is **on**, the U
 5. Tailscale standalone package, `tag:server`, `sudo tailscaled install-system-daemon`.
 6. OrbStack; Tart for macOS VM workspaces; the MLX venv for the local model (home-agents `deploy/studio/launchd/`).
 7. UPS settings: the Studio shuts down at about **50%**, the hub Mac at 20%, so the house keeps running longest.
-8. `services/monitoring/compose.yaml` on both Macs; Uptime Kuma on each watching the other.
+8. Monitoring: switch to the Mac mini + Mac Studio setup in `services/monitoring/README.md` (Loki and Grafana move to the Studio, alerting stays on the Mac mini, node_exporter and security checks on both). Uptime Kuma on each Mac watches the other.
 9. Monthly maintenance window: update one Mac at a time, never both on the same day, after a fresh HA backup.
 10. Power test: pull the plug. The Studio waits for unlock and alerts you; voice falls back to Assist on the hub Mac; services return after unlock.
 11. Rehearse restoring the HA backup onto the Studio as a temporary host, then put a monthly restore test on the calendar.

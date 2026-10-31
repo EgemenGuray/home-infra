@@ -1,0 +1,56 @@
+# Prometheus on the Mac mini, in both setups. Targets that depend on the house (Home Assistant's
+# address, whether the Mac Studio exists, where the agent service runs) come from
+# targets/*.yaml, which are git-ignored copies of targets/*.example.yaml. Tokens come from
+# secrets/, also git-ignored. A missing or empty token shows up as a down target and an alert.
+global:
+  scrape_interval: 60s       # lean on purpose; 15d of this fits well under 1 GB
+  scrape_timeout: 10s
+  evaluation_interval: 60s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs: [{targets: ["localhost:9090"], labels: {host: hub}}]
+
+  - job_name: alertmanager
+    static_configs: [{targets: ["alertmanager:9093"], labels: {host: hub}}]
+
+  - job_name: alloy
+    static_configs: [{targets: ["alloy:12345"], labels: {host: hub}}]
+
+  # Host health from node_exporter running natively on each Mac (macos/install-monitoring.sh).
+  # The Mac mini is reached through Docker's host gateway; the Studio comes from targets/node.yaml.
+  - job_name: node
+    static_configs: [{targets: ["host.docker.internal:9100"], labels: {host: hub}}]
+    file_sd_configs: [{files: ["/etc/prometheus/targets/node.yaml"]}]
+
+  - job_name: cadvisor
+    static_configs: [{targets: ["cadvisor:8080"], labels: {host: hub}}]
+    file_sd_configs: [{files: ["/etc/prometheus/targets/cadvisor.yaml"]}]
+    metric_relabel_configs:
+      - source_labels: [name]
+        regex: ""
+        action: drop          # keep named containers only
+
+  # Home Assistant's /api/prometheus (home-assistant-config packages/monitoring.yaml).
+  - job_name: home-assistant
+    metrics_path: /api/prometheus
+    authorization: {credentials_file: /etc/prometheus/secrets/ha-token}
+    file_sd_configs: [{files: ["/etc/prometheus/targets/home-assistant.yaml"]}]
+
+  # Agent service and harness (home-agents /metrics): spend, approvals, tasks, providers.
+  - job_name: home-agents
+    authorization: {credentials_file: /etc/prometheus/secrets/agents-token}
+    file_sd_configs: [{files: ["/etc/prometheus/targets/home-agents.yaml"]}]
+
+  # Uptime Kuma's own checks (services/compose.yaml), so a red check also becomes a push.
+  - job_name: uptime-kuma
+    basic_auth: {username: "", password_file: /etc/prometheus/secrets/kuma-api-key}
+    static_configs: [{targets: ["host.docker.internal:3001"], labels: {host: hub}}]
