@@ -41,6 +41,14 @@ def test_tailnet_policy_example_has_no_wildcard_access():
     assert '"funnel"' not in text  # no node attribute that would allow funnel
 
 
+def test_screen_relay_is_the_only_way_to_a_workspace_screen():
+    """Live view and take over go through the relay on 8710 (home-agents screen_relay.py), never raw VNC."""
+    text = (ROOT / "tailscale/policy.hujson.example").read_text()
+    rules = [line for line in text.splitlines() if '"action": "accept"' in line]
+    assert any('"group:owner"' in r and '"tag:workspace:8710"' in r for r in rules)
+    assert not any(re.search(r"tag:workspace:[^\"]*\b(5900|6080)\b", r) for r in rules)
+
+
 def test_example_files_hold_no_real_values():
     for path in ROOT.glob("**/*.example*"):
         text = path.read_text()
